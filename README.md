@@ -1,0 +1,3 @@
+# BEC
+
+Repository initialized.
