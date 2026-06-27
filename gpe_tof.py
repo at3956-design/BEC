@@ -48,8 +48,8 @@ a_s      = 5.2e-9                          # s-wave scattering length (m), 87Rb
 g3D      = 4 * np.pi * (a_s / a_ho)       # dimensionless coupling
 
 # ── Grid ─────────────────────────────────────────────────────────────────────
-Nx, Ny, Nz = 64, 64, 64           # grid points (keep powers of 2 for FFT)
-Lx, Ly, Lz = 20.0, 20.0, 30.0   # box half-widths in l0 — larger Lz for tight z-axis
+Nx, Ny, Nz = 64, 64, 256          # high Nz needed: initial R_z ~ 0.5 l0 requires dz << 0.5
+Lx, Ly, Lz = 20.0, 20.0, 20.0   # dz = 40/256 ~ 0.16 l0, resolves tight z-axis cleanly
 
 x = np.linspace(-Lx, Lx, Nx, endpoint=False)
 y = np.linspace(-Ly, Ly, Ny, endpoint=False)
