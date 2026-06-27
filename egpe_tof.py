@@ -247,6 +247,7 @@ fig.text(0.01, 0.27, "XZ\nview", va='center', ha='left', fontsize=9)
 
 plt.savefig("tof_expansion.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_expansion.png")
+plt.show(block=False)
 
 # ── 4. Waist evolution plot ───────────────────────────────────────────────────
 fig2, ax = plt.subplots(figsize=(7, 5))
@@ -261,4 +262,4 @@ ax.grid(True, alpha=0.3)
 fig2.tight_layout()
 plt.savefig("tof_waists.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_waists.png")
-plt.show()
+plt.show(block=True)   # keep both windows open until manually closed
