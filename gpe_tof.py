@@ -126,9 +126,10 @@ print("Running time-of-flight expansion...")
 dt_real = 0.005                         # real-time step (1/omega_x)
 kin_real = kinetic_propagator(dt_real)
 
-t_tof_max  = 20.0                       # total TOF duration
+save_times_ms = [0, 5, 10, 15, 20]                      # snapshots in ms
+save_times = [t_ms / t_unit_ms for t_ms in save_times_ms]  # convert to dimensionless
+t_tof_max   = max(save_times)
 n_tof_steps = int(t_tof_max / abs(dt_real))
-save_times  = [0, 2, 5, 10, 15, 20]    # snapshots in units of 1/omega_x
 snapshots   = {}
 
 psi = psi_gs.copy()
@@ -165,7 +166,7 @@ for col, t_snap in enumerate(save_times):
     ax = fig.add_subplot(gs[0, col])
     ax.imshow(n_xy.T, origin='lower', aspect='equal',
               extent=[-Lx, Lx, -Ly, Ly], cmap='Blues', vmin=0, vmax=vmax_xy)
-    ax.set_title(f"t = {t_snap * t_unit_ms:.1f} ms", fontsize=9)
+    ax.set_title(f"t = {save_times_ms[col]} ms", fontsize=9)
     ax.set_xlabel("x / l₀", fontsize=8)
     if col == 0:
         ax.set_ylabel("y / l₀", fontsize=8)
