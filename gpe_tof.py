@@ -48,8 +48,8 @@ a_s      = 5.2e-9                          # s-wave scattering length (m), 87Rb
 g3D      = 4 * np.pi * (a_s / a_ho)       # dimensionless coupling
 
 # ── Grid ─────────────────────────────────────────────────────────────────────
-Nx, Ny, Nz = 128, 128, 64         # grid points (keep powers of 2 for FFT)
-Lx, Ly, Lz = 40.0, 40.0, 20.0   # box half-widths in l0 — large enough for TOF=20
+Nx, Ny, Nz = 64, 64, 32           # grid points (keep powers of 2 for FFT)
+Lx, Ly, Lz = 20.0, 20.0, 15.0   # box half-widths in l0 — sufficient for 20 ms TOF
 
 x = np.linspace(-Lx, Lx, Nx, endpoint=False)
 y = np.linspace(-Ly, Ly, Ny, endpoint=False)
@@ -126,23 +126,21 @@ print("Running time-of-flight expansion...")
 dt_real = 0.005                         # real-time step (1/omega_x)
 kin_real = kinetic_propagator(dt_real)
 
-save_times_ms = [0, 5, 10, 15, 20]                      # snapshots in ms
+save_times_ms = [0, 5, 10, 15, 20]                         # snapshots in ms
 save_times = [t_ms / t_unit_ms for t_ms in save_times_ms]  # convert to dimensionless
-t_tof_max   = max(save_times)
-n_tof_steps = int(t_tof_max / abs(dt_real))
+save_steps = {int(round(ts / abs(dt_real))): t_ms
+              for ts, t_ms in zip(save_times, save_times_ms)}
+n_tof_steps = max(save_steps.keys())   # run exactly to the last snapshot step
 snapshots   = {}
 
 psi = psi_gs.copy()
 V_off = np.zeros_like(V_trap)           # trap is OFF during TOF
 
 # Convert save_times to nearest step indices to avoid floating-point misses
-save_steps = {int(round(ts / abs(dt_real))): (ts, t_ms)
-              for ts, t_ms in zip(save_times, save_times_ms)}
-
 for step in range(n_tof_steps + 1):
     if step in save_steps:
-        ts, t_ms = save_steps[step]
-        snapshots[ts] = np.abs(psi)**2
+        t_ms = save_steps[step]
+        snapshots[t_ms] = np.abs(psi)**2
         print(f"  saved snapshot at t = {t_ms} ms")
     if step < n_tof_steps:
         psi = ssfm_step(psi, dt_real, V_off, g3D, kin_real)
@@ -153,12 +151,12 @@ print("\nPlotting...")
 fig = plt.figure(figsize=(16, 8))
 fig.suptitle("BEC Time-of-Flight Expansion (3D GPE, split-step Fourier)", fontsize=14)
 
-gs = GridSpec(2, len(save_times), figure=fig, hspace=0.4, wspace=0.3)
+gs = GridSpec(2, len(save_times_ms), figure=fig, hspace=0.4, wspace=0.3)
 
-vmax_xy = max(snapshots[t].sum(axis=2).max() * dz for t in save_times)
-vmax_xz = max(snapshots[t].sum(axis=1).max() * dy for t in save_times)
+vmax_xy = max(snapshots[t].sum(axis=2).max() * dz for t in save_times_ms)
+vmax_xz = max(snapshots[t].sum(axis=1).max() * dy for t in save_times_ms)
 
-for col, t_snap in enumerate(save_times):
+for col, t_snap in enumerate(save_times_ms):
     n3d = snapshots[t_snap]
 
     # XY projection (integrate over z)
