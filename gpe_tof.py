@@ -48,8 +48,8 @@ a_s      = 5.2e-9                          # s-wave scattering length (m), 87Rb
 g3D      = 4 * np.pi * (a_s / a_ho)       # dimensionless coupling
 
 # ── Grid ─────────────────────────────────────────────────────────────────────
-Nx, Ny, Nz = 64, 64, 32           # grid points (keep powers of 2 for FFT)
-Lx, Ly, Lz = 20.0, 20.0, 15.0   # box half-widths in l0 — sufficient for 20 ms TOF
+Nx, Ny, Nz = 64, 64, 64           # grid points (keep powers of 2 for FFT)
+Lx, Ly, Lz = 20.0, 20.0, 30.0   # box half-widths in l0 — larger Lz for tight z-axis
 
 x = np.linspace(-Lx, Lx, Nx, endpoint=False)
 y = np.linspace(-Ly, Ly, Ny, endpoint=False)
@@ -136,12 +136,25 @@ snapshots   = {}
 psi = psi_gs.copy()
 V_off = np.zeros_like(V_trap)           # trap is OFF during TOF
 
-# Convert save_times to nearest step indices to avoid floating-point misses
+def rms_waist(n3d, coord, dV):
+    """RMS width along one axis given 3D density and coordinate array."""
+    norm = n3d.sum() * dV
+    mean = (n3d * coord).sum() * dV / norm
+    return np.sqrt((n3d * (coord - mean)**2).sum() * dV / norm)
+
+waist_times_ms = []
+waist_x, waist_y, waist_z = [], [], []
+
 for step in range(n_tof_steps + 1):
+    n3d = np.abs(psi)**2
     if step in save_steps:
         t_ms = save_steps[step]
-        snapshots[t_ms] = np.abs(psi)**2
+        snapshots[t_ms] = n3d
         print(f"  saved snapshot at t = {t_ms} ms")
+    waist_times_ms.append(step * abs(dt_real) * t_unit_ms)
+    waist_x.append(rms_waist(n3d, X, dV) * a_ho * 1e6)   # convert to µm
+    waist_y.append(rms_waist(n3d, Y, dV) * a_ho * 1e6)
+    waist_z.append(rms_waist(n3d, Z, dV) * a_ho * 1e6)
     if step < n_tof_steps:
         psi = ssfm_step(psi, dt_real, V_off, g3D, kin_real)
 
@@ -184,4 +197,18 @@ fig.text(0.01, 0.27, "XZ\nprojection", va='center', ha='left', fontsize=9, rotat
 
 plt.savefig("tof_expansion.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_expansion.png")
+
+# ── 4. Waist evolution plot ───────────────────────────────────────────────────
+fig2, ax = plt.subplots(figsize=(7, 5))
+ax.plot(waist_times_ms, waist_x, label=f"x  (ω_x = {freq_x_Hz} Hz)", color='steelblue')
+ax.plot(waist_times_ms, waist_y, label=f"y  (ω_y = {freq_y_Hz} Hz)", color='cornflowerblue', linestyle='--')
+ax.plot(waist_times_ms, waist_z, label=f"z  (ω_z = {freq_z_Hz} Hz)", color='tomato')
+ax.set_xlabel("Time of flight (ms)", fontsize=12)
+ax.set_ylabel("RMS waist (µm)", fontsize=12)
+ax.set_title("BEC cloud waist during TOF", fontsize=13)
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+fig2.tight_layout()
+plt.savefig("tof_waists.png", dpi=150, bbox_inches='tight')
+print("Saved: tof_waists.png")
 plt.show()
