@@ -31,8 +31,8 @@ a_ho     = 1e-6           # harmonic oscillator length l0 (m)
 g3D      = 4 * np.pi * (a_s / a_ho)  # dimensionless coupling
 
 # ── Grid ─────────────────────────────────────────────────────────────────────
-Nx, Ny, Nz = 64, 64, 32           # grid points (keep powers of 2 for FFT)
-Lx, Ly, Lz = 12.0, 12.0, 6.0     # box half-widths in l0
+Nx, Ny, Nz = 128, 128, 64         # grid points (keep powers of 2 for FFT)
+Lx, Ly, Lz = 40.0, 40.0, 20.0   # box half-widths in l0 — large enough for TOF=20
 
 x = np.linspace(-Lx, Lx, Nx, endpoint=False)
 y = np.linspace(-Ly, Ly, Ny, endpoint=False)
