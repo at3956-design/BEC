@@ -20,15 +20,32 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 # ── Physical parameters ──────────────────────────────────────────────────────
-# Trap frequencies (in units of omega_x, so omega_x = 1)
-omega_x = 1.0
-omega_y = 1.0   # change to make cigar/pancake shape
-omega_z = 8.0   # tight z-axis → pancake-like (common in labs)
+# Trap frequencies in Hz (angular: omega = 2*pi*f)
+freq_x_Hz = 20.0    # Hz
+freq_y_Hz = 20.0    # Hz
+freq_z_Hz = 160.0   # Hz  (tight axis → pancake)
 
-N_atoms  = 5_000          # number of atoms
-a_s      = 5.2e-9         # s-wave scattering length (m), e.g. 87Rb
-a_ho     = 1e-6           # harmonic oscillator length l0 (m)
-g3D      = 4 * np.pi * (a_s / a_ho)  # dimensionless coupling
+hbar = 1.0546e-34   # J·s
+m    = 1.443e-25    # kg (87Rb)
+
+omega_x_SI = 2 * np.pi * freq_x_Hz   # rad/s
+omega_y_SI = 2 * np.pi * freq_y_Hz
+omega_z_SI = 2 * np.pi * freq_z_Hz
+
+# Harmonic oscillator length along x (our length unit)
+a_ho = np.sqrt(hbar / (m * omega_x_SI))   # meters
+# Time unit: 1/omega_x in seconds
+t_unit_s = 1.0 / omega_x_SI               # seconds per dimensionless time unit
+t_unit_ms = t_unit_s * 1e3                # milliseconds per dimensionless time unit
+
+# Dimensionless trap frequency ratios (omega_x = 1 in code)
+omega_x = 1.0
+omega_y = omega_y_SI / omega_x_SI
+omega_z = omega_z_SI / omega_x_SI
+
+N_atoms  = 5_000
+a_s      = 5.2e-9                          # s-wave scattering length (m), 87Rb
+g3D      = 4 * np.pi * (a_s / a_ho)       # dimensionless coupling
 
 # ── Grid ─────────────────────────────────────────────────────────────────────
 Nx, Ny, Nz = 128, 128, 64         # grid points (keep powers of 2 for FFT)
@@ -147,8 +164,8 @@ for col, t_snap in enumerate(save_times):
     n_xy = n3d.sum(axis=2) * dz
     ax = fig.add_subplot(gs[0, col])
     ax.imshow(n_xy.T, origin='lower', aspect='equal',
-              extent=[-Lx, Lx, -Ly, Ly], cmap='inferno', vmin=0, vmax=vmax_xy)
-    ax.set_title(f"t = {t_snap} / ω_x", fontsize=9)
+              extent=[-Lx, Lx, -Ly, Ly], cmap='Blues', vmin=0, vmax=vmax_xy)
+    ax.set_title(f"t = {t_snap * t_unit_ms:.1f} ms", fontsize=9)
     ax.set_xlabel("x / l₀", fontsize=8)
     if col == 0:
         ax.set_ylabel("y / l₀", fontsize=8)
@@ -157,7 +174,7 @@ for col, t_snap in enumerate(save_times):
     n_xz = n3d.sum(axis=1) * dy
     ax2 = fig.add_subplot(gs[1, col])
     ax2.imshow(n_xz.T, origin='lower', aspect='equal',
-               extent=[-Lx, Lx, -Lz, Lz], cmap='inferno', vmin=0, vmax=vmax_xz)
+               extent=[-Lx, Lx, -Lz, Lz], cmap='Blues', vmin=0, vmax=vmax_xz)
     ax2.set_xlabel("x / l₀", fontsize=8)
     if col == 0:
         ax2.set_ylabel("z / l₀", fontsize=8)
