@@ -135,17 +135,17 @@ snapshots   = {}
 psi = psi_gs.copy()
 V_off = np.zeros_like(V_trap)           # trap is OFF during TOF
 
-t = 0.0
+# Convert save_times to nearest step indices to avoid floating-point misses
+save_steps = {int(round(ts / abs(dt_real))): (ts, t_ms)
+              for ts, t_ms in zip(save_times, save_times_ms)}
+
 for step in range(n_tof_steps + 1):
-    t_round = round(t, 6)
-    if any(abs(t_round - ts) < abs(dt_real) / 2 for ts in save_times):
-        key = min(save_times, key=lambda ts: abs(t_round - ts))
-        if key not in snapshots:
-            snapshots[key] = np.abs(psi)**2
-            print(f"  saved snapshot at t = {t:.2f} / ω_x")
+    if step in save_steps:
+        ts, t_ms = save_steps[step]
+        snapshots[ts] = np.abs(psi)**2
+        print(f"  saved snapshot at t = {t_ms} ms")
     if step < n_tof_steps:
         psi = ssfm_step(psi, dt_real, V_off, g3D, kin_real)
-    t += abs(dt_real)
 
 # ── 3. Plot column-integrated density (integrate along z) ────────────────────
 print("\nPlotting...")
