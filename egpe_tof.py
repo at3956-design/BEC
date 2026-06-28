@@ -285,26 +285,44 @@ aspect_zy = np.array(waist_z) / np.array(waist_y)
 ar0_zx = aspect_zx[0]
 ar0_zy = aspect_zy[0]
 cd_zx  = ar0_zx * bz_cd / bx_cd
+cd_zy  = ar0_zy * bz_cd / by_cd
 
-# Find inversion times (σ_z/σ_x crosses 1)
-t_inv_sim = np.interp(1.0, aspect_zx, waist_times_ms)
-t_inv_cd  = np.interp(1.0, cd_zx,    t_cd_ms)
-print(f"\nAspect ratio inversion (σ_z/σ_x = 1):")
-print(f"  eGPE simulation : {t_inv_sim:.2f} ms")
-print(f"  C-D theory      : {t_inv_cd:.2f} ms")
+def find_inversion(ratio, times):
+    """Return time when ratio crosses 1 from below, or None if it never does."""
+    idx = np.where(np.diff(np.sign(ratio - 1.0)) > 0)[0]
+    if len(idx) == 0:
+        return None
+    i = idx[0]
+    return float(np.interp(1.0, ratio[i:i+2], times[i:i+2]))
+
+t_inv_sim_zx = find_inversion(aspect_zx, waist_times_ms)
+t_inv_sim_zy = find_inversion(aspect_zy, waist_times_ms)
+t_inv_cd_zx  = find_inversion(cd_zx,    t_cd_ms)
+t_inv_cd_zy  = find_inversion(cd_zy,    t_cd_ms)
+
+print(f"\nAspect ratio inversion times:")
+for label, t in [("eGPE σ_z/σ_x", t_inv_sim_zx), ("eGPE σ_z/σ_y", t_inv_sim_zy),
+                 ("C-D  σ_z/σ_x", t_inv_cd_zx),  ("C-D  σ_z/σ_y", t_inv_cd_zy)]:
+    print(f"  {label}: {f'{t:.2f} ms' if t is not None else 'not reached'}")
 
 fig3, ax = plt.subplots(figsize=(7, 5))
 ax.plot(waist_times_ms, aspect_zx, color='tomato',      label="eGPE  σ_z / σ_x")
 ax.plot(waist_times_ms, aspect_zy, color='darkorange',  label="eGPE  σ_z / σ_y", ls='--')
-ax.plot(t_cd_ms, cd_zx,            color='tomato',      label="C-D theory  b_z / b_x",
-        ls=':', lw=2, alpha=0.7)
-ax.plot(t_cd_ms, ar0_zy * bz_cd / by_cd, color='darkorange', label="C-D theory  b_z / b_y",
-        ls=':', lw=2, alpha=0.7)
+ax.plot(t_cd_ms, cd_zx, color='tomato',    label="C-D theory  b_z / b_x", ls=':', lw=2, alpha=0.7)
+ax.plot(t_cd_ms, cd_zy, color='darkorange', label="C-D theory  b_z / b_y", ls=':', lw=2, alpha=0.7)
 ax.axhline(1.0, color='gray', lw=1, ls=':', label="aspect ratio = 1")
-ax.axvline(t_inv_sim, color='tomato', lw=1, ls='--', alpha=0.5,
-           label=f"inversion (sim)  {t_inv_sim:.1f} ms")
-ax.axvline(t_inv_cd,  color='gray',   lw=1, ls='--', alpha=0.5,
-           label=f"inversion (C-D)  {t_inv_cd:.1f} ms")
+if t_inv_sim_zx is not None:
+    ax.axvline(t_inv_sim_zx, color='tomato', lw=1, ls='--', alpha=0.5,
+               label=f"inv sim z/x  {t_inv_sim_zx:.1f} ms")
+if t_inv_cd_zx is not None:
+    ax.axvline(t_inv_cd_zx,  color='tomato', lw=1, ls=':',  alpha=0.5,
+               label=f"inv C-D z/x  {t_inv_cd_zx:.1f} ms")
+if t_inv_sim_zy is not None:
+    ax.axvline(t_inv_sim_zy, color='darkorange', lw=1, ls='--', alpha=0.5,
+               label=f"inv sim z/y  {t_inv_sim_zy:.1f} ms")
+if t_inv_cd_zy is not None:
+    ax.axvline(t_inv_cd_zy,  color='darkorange', lw=1, ls=':',  alpha=0.5,
+               label=f"inv C-D z/y  {t_inv_cd_zy:.1f} ms")
 ax.set_xlabel("Time of flight (ms)", fontsize=12)
 ax.set_ylabel("Aspect ratio", fontsize=12)
 ax.set_title(f"Aspect ratio inversion  (ε_dd={eps_dd:.2f},  N={N_mol})\n"
