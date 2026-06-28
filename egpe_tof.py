@@ -22,6 +22,9 @@ Parameters match the NaCs BEC (Bigagli et al., Nature 631, 289 (2024)):
   - a_s ~ 1500 a0, a_dd ~ 1300 a0  (at microwave compensation point)
 """
 
+import os
+os.environ["JAX_PLATFORMS"] = "cpu"   # Metal too experimental; CPU gives float64 + JIT
+
 import jax
 import jax.numpy as jnp
 from jax import jit
@@ -29,8 +32,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-# Metal GPU supports float32 only; float64 is kept on CPU fallback
-# jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", True)   # float64 precision on CPU
 print(f"JAX backend: {jax.default_backend()}")
 
 # ── Physical constants ────────────────────────────────────────────────────────
@@ -91,12 +93,11 @@ K2 = KX**2 + KY**2 + KZ**2
 with np.errstate(invalid='ignore', divide='ignore'):
     dipolar_kernel = np.where(K2 > 0, (3 * KZ**2 / K2 - 1) / 3.0, 0.0)
 
-# Move everything to JAX arrays (float32 — Metal does not support float64)
-_f32 = np.float32
-X_j  = jnp.array(X.astype(_f32));  Y_j = jnp.array(Y.astype(_f32));  Z_j = jnp.array(Z.astype(_f32))
-K2_j = jnp.array(K2.astype(_f32))
-V_trap_j = jnp.array((0.5 * (wx**2 * X**2 + wy**2 * Y**2 + wz**2 * Z**2)).astype(_f32))
-dk_j     = jnp.array(dipolar_kernel.astype(_f32))
+# Move everything to JAX arrays
+X_j  = jnp.array(X);  Y_j = jnp.array(Y);  Z_j = jnp.array(Z)
+K2_j = jnp.array(K2)
+V_trap_j = jnp.array(0.5 * (wx**2 * X**2 + wy**2 * Y**2 + wz**2 * Z**2))
+dk_j     = jnp.array(dipolar_kernel)
 
 # ── JAX-compiled propagators ─────────────────────────────────────────────────
 @jit
@@ -142,7 +143,7 @@ dt_imag  = -1j * 0.01
 kp_imag  = kinetic_prop(dt_imag)
 
 psi = jnp.array(
-    np.exp(-(X**2/(2*1.5**2) + Y**2/(2*0.8**2) + Z**2/(2*0.6**2))).astype(np.complex64)
+    np.exp(-(X**2/(2*1.5**2) + Y**2/(2*0.8**2) + Z**2/(2*0.6**2))).astype(complex)
 )
 psi = normalize(psi)
 
