@@ -258,15 +258,39 @@ plt.show(block=False)
 aspect_zx = np.array(waist_z) / np.array(waist_x)
 aspect_zy = np.array(waist_z) / np.array(waist_y)
 
+# Castin-Dum scaling theory (contact-only, Thomas-Fermi limit)
+# b_i'' = w_i^2 / (b_i * b_x * b_y * b_z),  b_i(0)=1, b_i'(0)=0
+from scipy.integrate import solve_ivp
+
+def castin_dum(t, y):
+    bx, by, bz, dbx, dby, dbz = y
+    vol = bx * by * bz
+    return [dbx, dby, dbz,
+            wx**2 / (bx * vol),
+            wy**2 / (by * vol),
+            wz**2 / (bz * vol)]
+
+t_max_s = max(waist_times_ms) * 1e-3 / t_unit_ms * (1/omega_x)  # in seconds... use ho units
+t_max_ho = max(waist_times_ms) / t_unit_ms                        # in 1/omega_x units
+t_cd = np.linspace(0, t_max_ho, 500)
+sol = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
+                t_eval=t_cd, rtol=1e-10, atol=1e-12)
+bx_cd, by_cd, bz_cd = sol.y[0], sol.y[1], sol.y[2]
+t_cd_ms = t_cd * t_unit_ms
+
 fig3, ax = plt.subplots(figsize=(7, 5))
-ax.plot(waist_times_ms, aspect_zx, color='tomato',      label="σ_z / σ_x")
-ax.plot(waist_times_ms, aspect_zy, color='darkorange',  label="σ_z / σ_y", ls='--')
+ax.plot(waist_times_ms, aspect_zx, color='tomato',      label="eGPE  σ_z / σ_x")
+ax.plot(waist_times_ms, aspect_zy, color='darkorange',  label="eGPE  σ_z / σ_y", ls='--')
+ax.plot(t_cd_ms, bz_cd / bx_cd,   color='tomato',      label="C-D theory  b_z / b_x",
+        ls=':', lw=2, alpha=0.7)
+ax.plot(t_cd_ms, bz_cd / by_cd,   color='darkorange',  label="C-D theory  b_z / b_y",
+        ls=':', lw=2, alpha=0.7)
 ax.axhline(1.0, color='gray', lw=1, ls=':', label="aspect ratio = 1")
 ax.set_xlabel("Time of flight (ms)", fontsize=12)
 ax.set_ylabel("Aspect ratio", fontsize=12)
 ax.set_title(f"Aspect ratio inversion  (ε_dd={eps_dd:.2f},  N={N_mol})\n"
              f"trap ({freq_x_Hz},{freq_y_Hz},{freq_z_Hz}) Hz", fontsize=11)
-ax.legend(fontsize=10);  ax.grid(True, alpha=0.3)
+ax.legend(fontsize=9);  ax.grid(True, alpha=0.3)
 fig3.tight_layout()
 plt.savefig("tof_aspect_ratio.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_aspect_ratio.png")
