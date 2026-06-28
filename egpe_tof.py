@@ -67,8 +67,19 @@ eps_dd    = a_dd / a_s
 g_contact = 4 * np.pi * (a_s / a_ho)
 g_dipolar = 4 * np.pi * (a_dd / a_ho)
 
+# LHY beyond-mean-field correction (Wächtler & Santos PRA 2016)
+# μ_LHY = g_lhy * (N|ψ|²)^(3/2),  f(ε_dd) integrates over Bogoliubov angles
+from scipy.integrate import quad
+def _lhy_f(eps):
+    val, _ = quad(lambda u: np.real((1 + eps*(3*u**2 - 1))**2.5), 0, 1)
+    return val
+
+f_edd     = _lhy_f(eps_dd)
+g_lhy     = (128 / (3 * np.sqrt(np.pi))) * 4 * np.pi * (a_s / a_ho)**2.5 * f_edd
+
 print(f"NaCs eGPE:  trap ({freq_x_Hz},{freq_y_Hz},{freq_z_Hz}) Hz  "
       f"|  a_ho = {a_ho*1e6:.2f} µm  |  ε_dd = {eps_dd:.2f}")
+print(f"LHY:  f(ε_dd) = {f_edd:.4f}  |  g_lhy = {g_lhy:.4e}")
 
 # ── Grid ──────────────────────────────────────────────────────────────────────
 Nx, Ny, Nz = 64, 64, 128
@@ -112,9 +123,10 @@ def dipolar_potential(psi):
 
 @jit
 def potential_step(psi, dt, V_ext):
-    n      = jnp.abs(psi)**2
-    Phi_dd = dipolar_potential(psi)
-    phase  = (V_ext + N_mol * g_contact * n + Phi_dd) * dt
+    n        = jnp.abs(psi)**2
+    Phi_dd   = dipolar_potential(psi)
+    V_lhy    = g_lhy * (N_mol * n)**1.5   # LHY quantum pressure ~ n^(3/2)
+    phase    = (V_ext + N_mol * g_contact * n + Phi_dd + V_lhy) * dt
     return psi * jnp.exp(-1j * phase)
 
 @jit
