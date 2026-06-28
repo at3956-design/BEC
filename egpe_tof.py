@@ -282,9 +282,9 @@ def eberlein_3d(t, y, Rx0, Ry0, Rz0, nx0, ny0, nz0):
     bx, by, bz, dbx, dby, dbz = y
     nx, ny, nz = demag_factors(bx*Rx0, by*Ry0, bz*Rz0)
     vol = bx * by * bz
-    ddx = wx**2/vol * (1 - eps_dd + 3*eps_dd*nx) / (1 - eps_dd + 3*eps_dd*nx0)
-    ddy = wy**2/vol * (1 - eps_dd + 3*eps_dd*ny) / (1 - eps_dd + 3*eps_dd*ny0)
-    ddz = wz**2/vol * (1 - eps_dd + 3*eps_dd*nz) / (1 - eps_dd + 3*eps_dd*nz0)
+    ddx = wx**2/(bx*vol) * (1 - eps_dd + 3*eps_dd*nx) / (1 - eps_dd + 3*eps_dd*nx0)
+    ddy = wy**2/(by*vol) * (1 - eps_dd + 3*eps_dd*ny) / (1 - eps_dd + 3*eps_dd*ny0)
+    ddz = wz**2/(bz*vol) * (1 - eps_dd + 3*eps_dd*nz) / (1 - eps_dd + 3*eps_dd*nz0)
     return [dbx, dby, dbz, ddx, ddy, ddz]
 
 t_max_ho = max(waist_times_ms) / t_unit_ms
