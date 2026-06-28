@@ -36,9 +36,9 @@ M_NaCs   = (23 + 133) * 1.6605e-27   # kg, NaCs mass
 d0_NaCs  = 4.75 * 3.336e-30          # C·m, permanent electric dipole moment
 
 # ── Trap frequencies (final BEC trap, Bigagli et al. Nature 2024) ─────────────
-freq_x_Hz = 23.0    # Hz
-freq_y_Hz = 49.0    # Hz
-freq_z_Hz = 58.0    # Hz  (tightest axis, gravity along -z)
+freq_x_Hz = 10.0    # Hz
+freq_y_Hz = 10.0    # Hz
+freq_z_Hz = 50.0    # Hz  (tightest axis, gravity along -z)
 
 omega_x = 2 * np.pi * freq_x_Hz   # rad/s
 omega_y = 2 * np.pi * freq_y_Hz
@@ -262,4 +262,23 @@ ax.grid(True, alpha=0.3)
 fig2.tight_layout()
 plt.savefig("tof_waists.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_waists.png")
-plt.show(block=True)   # keep both windows open until manually closed
+plt.show(block=False)
+
+# ── 5. Aspect ratio plot ──────────────────────────────────────────────────────
+aspect_zx = np.array(waist_z) / np.array(waist_x)
+aspect_zy = np.array(waist_z) / np.array(waist_y)
+
+fig3, ax = plt.subplots(figsize=(7, 5))
+ax.plot(waist_times_ms, aspect_zx, color='tomato',        label="σ_z / σ_x")
+ax.plot(waist_times_ms, aspect_zy, color='darkorange', ls='--', label="σ_z / σ_y")
+ax.axhline(1.0, color='gray', lw=1, ls=':', label="aspect ratio = 1")
+ax.set_xlabel("Time of flight (ms)", fontsize=12)
+ax.set_ylabel("Aspect ratio", fontsize=12)
+ax.set_title(f"Aspect ratio inversion  (ε_dd = {eps_dd:.2f},  N = {N_mol})\n"
+             f"trap ({freq_x_Hz}, {freq_y_Hz}, {freq_z_Hz}) Hz", fontsize=11)
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+fig3.tight_layout()
+plt.savefig("tof_aspect_ratio.png", dpi=150, bbox_inches='tight')
+print("Saved: tof_aspect_ratio.png")
+plt.show(block=True)
