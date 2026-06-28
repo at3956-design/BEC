@@ -240,26 +240,7 @@ plt.savefig("tof_expansion.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_expansion.png")
 plt.show(block=False)
 
-# ── 4. Waist evolution ────────────────────────────────────────────────────────
-fig2, ax = plt.subplots(figsize=(7, 5))
-ax.plot(waist_times_ms, waist_x, color='steelblue',     label=f"x  ({freq_x_Hz} Hz)")
-ax.plot(waist_times_ms, waist_y, color='cornflowerblue', label=f"y  ({freq_y_Hz} Hz)", ls='--')
-ax.plot(waist_times_ms, waist_z, color='tomato',         label=f"z  ({freq_z_Hz} Hz)")
-ax.set_xlabel("Time of flight (ms)", fontsize=12)
-ax.set_ylabel("RMS waist (µm)", fontsize=12)
-ax.set_title(f"NaCs BEC waist evolution  (ε_dd={eps_dd:.2f},  N={N_mol})", fontsize=12)
-ax.legend(fontsize=10);  ax.grid(True, alpha=0.3)
-fig2.tight_layout()
-plt.savefig("tof_waists.png", dpi=150, bbox_inches='tight')
-print("Saved: tof_waists.png")
-plt.show(block=False)
-
-# ── 5. Aspect ratio ───────────────────────────────────────────────────────────
-aspect_zx = np.array(waist_z) / np.array(waist_x)
-aspect_zy = np.array(waist_z) / np.array(waist_y)
-
-# Castin-Dum scaling theory (contact-only, Thomas-Fermi limit)
-# b_i'' = w_i^2 / (b_i * b_x * b_y * b_z),  b_i(0)=1, b_i'(0)=0
+# ── 4. Waist evolution + Castin-Dum theory ───────────────────────────────────
 from scipy.integrate import solve_ivp
 
 def castin_dum(t, y):
@@ -270,13 +251,35 @@ def castin_dum(t, y):
             wy**2 / (by * vol),
             wz**2 / (bz * vol)]
 
-t_max_s = max(waist_times_ms) * 1e-3 / t_unit_ms * (1/omega_x)  # in seconds... use ho units
-t_max_ho = max(waist_times_ms) / t_unit_ms                        # in 1/omega_x units
-t_cd = np.linspace(0, t_max_ho, 500)
-sol = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
-                t_eval=t_cd, rtol=1e-10, atol=1e-12)
+t_max_ho = max(waist_times_ms) / t_unit_ms
+t_cd     = np.linspace(0, t_max_ho, 500)
+sol      = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
+                     t_eval=t_cd, rtol=1e-10, atol=1e-12)
 bx_cd, by_cd, bz_cd = sol.y[0], sol.y[1], sol.y[2]
-t_cd_ms = t_cd * t_unit_ms
+t_cd_ms  = t_cd * t_unit_ms
+
+# σ_i(t) = σ_i(0) * b_i(t)
+sx0, sy0, sz0 = waist_x[0], waist_y[0], waist_z[0]
+
+fig2, ax = plt.subplots(figsize=(7, 5))
+ax.plot(waist_times_ms, waist_x, color='steelblue',      label=f"eGPE x  ({freq_x_Hz} Hz)")
+ax.plot(waist_times_ms, waist_y, color='cornflowerblue', label=f"eGPE y  ({freq_y_Hz} Hz)", ls='--')
+ax.plot(waist_times_ms, waist_z, color='tomato',         label=f"eGPE z  ({freq_z_Hz} Hz)")
+ax.plot(t_cd_ms, sx0 * bx_cd, color='steelblue',      ls=':', lw=2, alpha=0.7, label="C-D x")
+ax.plot(t_cd_ms, sy0 * by_cd, color='cornflowerblue', ls=':', lw=2, alpha=0.7, label="C-D y")
+ax.plot(t_cd_ms, sz0 * bz_cd, color='tomato',         ls=':', lw=2, alpha=0.7, label="C-D z")
+ax.set_xlabel("Time of flight (ms)", fontsize=12)
+ax.set_ylabel("RMS waist (µm)", fontsize=12)
+ax.set_title(f"NaCs BEC waist evolution  (ε_dd={eps_dd:.2f},  N={N_mol})", fontsize=12)
+ax.legend(fontsize=9);  ax.grid(True, alpha=0.3)
+fig2.tight_layout()
+plt.savefig("tof_waists.png", dpi=150, bbox_inches='tight')
+print("Saved: tof_waists.png")
+plt.show(block=False)
+
+# ── 5. Aspect ratio ───────────────────────────────────────────────────────────
+aspect_zx = np.array(waist_z) / np.array(waist_x)
+aspect_zy = np.array(waist_z) / np.array(waist_y)
 
 # C-D gives scaling factors b_i(0)=1; multiply by initial aspect ratio from simulation
 ar0_zx = aspect_zx[0]
