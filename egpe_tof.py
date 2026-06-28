@@ -278,12 +278,16 @@ sol = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
 bx_cd, by_cd, bz_cd = sol.y[0], sol.y[1], sol.y[2]
 t_cd_ms = t_cd * t_unit_ms
 
+# C-D gives scaling factors b_i(0)=1; multiply by initial aspect ratio from simulation
+ar0_zx = aspect_zx[0]
+ar0_zy = aspect_zy[0]
+
 fig3, ax = plt.subplots(figsize=(7, 5))
 ax.plot(waist_times_ms, aspect_zx, color='tomato',      label="eGPE  σ_z / σ_x")
 ax.plot(waist_times_ms, aspect_zy, color='darkorange',  label="eGPE  σ_z / σ_y", ls='--')
-ax.plot(t_cd_ms, bz_cd / bx_cd,   color='tomato',      label="C-D theory  b_z / b_x",
+ax.plot(t_cd_ms, ar0_zx * bz_cd / bx_cd, color='tomato',    label="C-D theory  b_z / b_x",
         ls=':', lw=2, alpha=0.7)
-ax.plot(t_cd_ms, bz_cd / by_cd,   color='darkorange',  label="C-D theory  b_z / b_y",
+ax.plot(t_cd_ms, ar0_zy * bz_cd / by_cd, color='darkorange', label="C-D theory  b_z / b_y",
         ls=':', lw=2, alpha=0.7)
 ax.axhline(1.0, color='gray', lw=1, ls=':', label="aspect ratio = 1")
 ax.set_xlabel("Time of flight (ms)", fontsize=12)
