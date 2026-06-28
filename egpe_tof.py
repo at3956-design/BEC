@@ -29,7 +29,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-jax.config.update("jax_enable_x64", True)   # use float64 for accuracy
+# Metal GPU supports float32 only; float64 is kept on CPU fallback
+# jax.config.update("jax_enable_x64", True)
 print(f"JAX backend: {jax.default_backend()}")
 
 # ── Physical constants ────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ dt_imag  = -1j * 0.01
 kp_imag  = kinetic_prop(dt_imag)
 
 psi = jnp.array(
-    np.exp(-(X**2/(2*1.5**2) + Y**2/(2*0.8**2) + Z**2/(2*0.6**2))).astype(complex)
+    np.exp(-(X**2/(2*1.5**2) + Y**2/(2*0.8**2) + Z**2/(2*0.6**2))).astype(np.complex64)
 )
 psi = normalize(psi)
 
