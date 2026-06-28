@@ -168,7 +168,7 @@ print("Running TOF expansion...")
 dt_real = 0.005
 kp_real = kinetic_prop(dt_real)
 
-save_times_ms = [0, 5, 10, 15, 17]
+save_times_ms = [0, 5, 10, 15, 20]
 save_times    = [t_ms / t_unit_ms for t_ms in save_times_ms]
 save_steps    = {int(round(ts / abs(dt_real))): t_ms
                  for ts, t_ms in zip(save_times, save_times_ms)}
