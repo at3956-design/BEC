@@ -174,6 +174,27 @@ for step in range(3000):
 print("Ground state found.\n")
 psi_gs = psi
 
+# ── 1b. Ground-state energy decomposition (quantum pressure vs interaction) ────
+# Kinetic (quantum-pressure) energy per axis:  E_kin,i = (1/2) ∫ |∂_i ψ|²  (ho units)
+# resolved in k-space as (1/2) Σ k_i² |ψ_k|²
+KX_j, KY_j, KZ_j = jnp.array(KX), jnp.array(KY), jnp.array(KZ)
+psi_k   = jnp.fft.fftn(psi_gs)
+norm_k  = jnp.sum(jnp.abs(psi_k)**2)          # Parseval normalization factor
+Ekin_x  = float(0.5 * jnp.sum(KX_j**2 * jnp.abs(psi_k)**2) / norm_k)
+Ekin_y  = float(0.5 * jnp.sum(KY_j**2 * jnp.abs(psi_k)**2) / norm_k)
+Ekin_z  = float(0.5 * jnp.sum(KZ_j**2 * jnp.abs(psi_k)**2) / norm_k)
+n_gs    = jnp.abs(psi_gs)**2
+Eint    = float(0.5 * N_mol * g_contact * jnp.sum(n_gs**2) * dV)
+Edd     = float(0.5 * jnp.sum(n_gs * dipolar_potential(psi_gs)) * dV)  # N already in Phi_dd
+Eint_tot = Eint + Edd
+
+print("Ground-state energy decomposition (ℏω_x per particle):")
+print(f"  quantum pressure:  E_kin,x = {Ekin_x:.3f}   E_kin,y = {Ekin_y:.3f}   E_kin,z = {Ekin_z:.3f}")
+print(f"  interaction:       E_contact = {Eint:.3f}   E_dipolar = {Edd:.3f}   (total {Eint_tot:.3f})")
+print(f"  quantum-pressure fraction  E_kin,i / (E_kin,i + E_int):")
+print(f"    x = {Ekin_x/(Ekin_x+Eint_tot):.3f}   y = {Ekin_y/(Ekin_y+Eint_tot):.3f}"
+      f"   z = {Ekin_z/(Ekin_z+Eint_tot):.3f}\n")
+
 # ── 2. Real-time TOF expansion ────────────────────────────────────────────────
 print("Running TOF expansion...")
 
