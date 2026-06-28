@@ -91,11 +91,12 @@ K2 = KX**2 + KY**2 + KZ**2
 with np.errstate(invalid='ignore', divide='ignore'):
     dipolar_kernel = np.where(K2 > 0, (3 * KZ**2 / K2 - 1) / 3.0, 0.0)
 
-# Move everything to JAX arrays
-X_j  = jnp.array(X);  Y_j = jnp.array(Y);  Z_j = jnp.array(Z)
-K2_j = jnp.array(K2)
-V_trap_j = jnp.array(0.5 * (wx**2 * X**2 + wy**2 * Y**2 + wz**2 * Z**2))
-dk_j     = jnp.array(dipolar_kernel)
+# Move everything to JAX arrays (float32 — Metal does not support float64)
+_f32 = np.float32
+X_j  = jnp.array(X.astype(_f32));  Y_j = jnp.array(Y.astype(_f32));  Z_j = jnp.array(Z.astype(_f32))
+K2_j = jnp.array(K2.astype(_f32))
+V_trap_j = jnp.array((0.5 * (wx**2 * X**2 + wy**2 * Y**2 + wz**2 * Z**2)).astype(_f32))
+dk_j     = jnp.array(dipolar_kernel.astype(_f32))
 
 # ── JAX-compiled propagators ─────────────────────────────────────────────────
 @jit
