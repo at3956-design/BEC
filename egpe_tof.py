@@ -264,31 +264,28 @@ def castin_dum(t, y):
             wy**2 / (by * vol),
             wz**2 / (bz * vol)]
 
-# Dipolar anisotropy function f(κ), κ = R_z/R_⊥ (Eberlein et al. PRA 2005)
-def f_kappa(kappa):
-    if abs(kappa - 1.0) < 1e-6:
-        return 0.0
-    elif kappa < 1.0:
-        e = np.sqrt(1.0 - kappa**2)
-        return (1 + 2*kappa**2) / (1 - kappa**2) - 3*kappa**2 * np.arctanh(e) / e**3
-    else:
-        e = np.sqrt(kappa**2 - 1.0)
-        return (1 + 2*kappa**2) / (1 - kappa**2) + 3*kappa**2 * np.arctan(e) / e**3
+# Full 3D Eberlein dipolar scaling (Eberlein et al. PRA 71, 033618, 2005)
+# Demagnetization factors of a triaxial ellipsoid via numerical integration
+from scipy.integrate import quad as _quad
 
-# Eberlein dipolar scaling (cylindrical symmetry, dipoles along z)
-# b_⊥ ≈ b_x ≈ b_y (uses ω_⊥ = geometric mean of ω_x, ω_y)
-w_perp = np.sqrt(wx * wy)
+def demag_factors(Rx, Ry, Rz):
+    """Demagnetization factors (nx, ny, nz) for ellipsoid with semi-axes Rx,Ry,Rz."""
+    def _integrand(tau, si2):
+        Delta = np.sqrt((tau+Rx**2)*(tau+Ry**2)*(tau+Rz**2))
+        return Rx*Ry*Rz / (2*(tau+si2)*Delta)
+    nx = _quad(_integrand, 0, np.inf, args=(Rx**2,), limit=200)[0]
+    ny = _quad(_integrand, 0, np.inf, args=(Ry**2,), limit=200)[0]
+    nz = _quad(_integrand, 0, np.inf, args=(Rz**2,), limit=200)[0]
+    return nx, ny, nz
 
-def eberlein(t, y, kappa0):
-    bperp, bz, dbperp, dbz = y
-    kp   = kappa0 * bz / bperp      # instantaneous κ
-    fk   = f_kappa(kp)
-    fk0  = f_kappa(kappa0)
-    norm_perp = 1 - eps_dd * (1 + fk0)
-    norm_z    = 1 + 2 * eps_dd * fk0
-    ddperp = (w_perp**2 / (bperp**2 * bz)) * (1 - eps_dd*(1 + fk)) / norm_perp
-    ddz    = (wz**2    / (bz**2 * bperp**2)) * (1 + 2*eps_dd*fk) / norm_z
-    return [dbperp, dbz, ddperp, ddz]
+def eberlein_3d(t, y, Rx0, Ry0, Rz0, nx0, ny0, nz0):
+    bx, by, bz, dbx, dby, dbz = y
+    nx, ny, nz = demag_factors(bx*Rx0, by*Ry0, bz*Rz0)
+    vol = bx * by * bz
+    ddx = wx**2/vol * (1 - eps_dd + 3*eps_dd*nx) / (1 - eps_dd + 3*eps_dd*nx0)
+    ddy = wy**2/vol * (1 - eps_dd + 3*eps_dd*ny) / (1 - eps_dd + 3*eps_dd*ny0)
+    ddz = wz**2/vol * (1 - eps_dd + 3*eps_dd*nz) / (1 - eps_dd + 3*eps_dd*nz0)
+    return [dbx, dby, dbz, ddx, ddy, ddz]
 
 t_max_ho = max(waist_times_ms) / t_unit_ms
 t_cd     = np.linspace(0, t_max_ho, 500)
@@ -298,26 +295,25 @@ sol_cd = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
 bx_cd, by_cd, bz_cd = sol_cd.y[0], sol_cd.y[1], sol_cd.y[2]
 
 sx0, sy0, sz0 = waist_x[0], waist_y[0], waist_z[0]
-kappa0 = sz0 / sx0   # initial aspect ratio from eGPE ground state
-fk0    = f_kappa(kappa0)
-print(f"Eberlein theory:  κ_0 = {kappa0:.3f}  |  f(κ_0) = {fk0:.4f}")
+nx0, ny0, nz0 = demag_factors(sx0, sy0, sz0)
+print(f"Eberlein 3D:  κ_0 = {sz0/sx0:.3f}  |  (nx,ny,nz) = ({nx0:.4f},{ny0:.4f},{nz0:.4f})")
 
-sol_eb = solve_ivp(eberlein, [0, t_max_ho], [1, 1, 0, 0],
-                   t_eval=t_cd, rtol=1e-10, atol=1e-12,
-                   args=(kappa0,))
-bperp_eb, bz_eb = sol_eb.y[0], sol_eb.y[1]
+sol_eb = solve_ivp(eberlein_3d, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
+                   t_eval=t_cd, rtol=1e-8, atol=1e-10,
+                   args=(sx0, sy0, sz0, nx0, ny0, nz0))
+bx_eb, by_eb, bz_eb = sol_eb.y[0], sol_eb.y[1], sol_eb.y[2]
 t_cd_ms = t_cd * t_unit_ms
 
 fig2, ax = plt.subplots(figsize=(8, 5))
 ax.plot(waist_times_ms, waist_x, color='steelblue',      label=f"eGPE x  ({freq_x_Hz} Hz)")
 ax.plot(waist_times_ms, waist_y, color='cornflowerblue', label=f"eGPE y  ({freq_y_Hz} Hz)", ls='--')
 ax.plot(waist_times_ms, waist_z, color='tomato',         label=f"eGPE z  ({freq_z_Hz} Hz)")
-ax.plot(t_cd_ms, sx0 * bx_cd,     color='steelblue',      ls=':',  lw=2, alpha=0.6, label="C-D x (contact)")
-ax.plot(t_cd_ms, sy0 * by_cd,     color='cornflowerblue', ls=':',  lw=2, alpha=0.6, label="C-D y (contact)")
-ax.plot(t_cd_ms, sz0 * bz_cd,     color='tomato',         ls=':',  lw=2, alpha=0.6, label="C-D z (contact)")
-ax.plot(t_cd_ms, sx0 * bperp_eb,  color='steelblue',      ls='--', lw=2, alpha=0.8, label="Eberlein x (dipolar)")
-ax.plot(t_cd_ms, sy0 * bperp_eb,  color='cornflowerblue', ls='--', lw=2, alpha=0.8, label="Eberlein y (dipolar)")
-ax.plot(t_cd_ms, sz0 * bz_eb,     color='tomato',         ls='--', lw=2, alpha=0.8, label="Eberlein z (dipolar)")
+ax.plot(t_cd_ms, sx0 * bx_cd, color='steelblue',      ls=':',  lw=2, alpha=0.6, label="C-D x (contact)")
+ax.plot(t_cd_ms, sy0 * by_cd, color='cornflowerblue', ls=':',  lw=2, alpha=0.6, label="C-D y (contact)")
+ax.plot(t_cd_ms, sz0 * bz_cd, color='tomato',         ls=':',  lw=2, alpha=0.6, label="C-D z (contact)")
+ax.plot(t_cd_ms, sx0 * bx_eb, color='steelblue',      ls='--', lw=2, alpha=0.8, label="Eberlein x (dipolar)")
+ax.plot(t_cd_ms, sy0 * by_eb, color='cornflowerblue', ls='--', lw=2, alpha=0.8, label="Eberlein y (dipolar)")
+ax.plot(t_cd_ms, sz0 * bz_eb, color='tomato',         ls='--', lw=2, alpha=0.8, label="Eberlein z (dipolar)")
 ax.set_xlabel("Time of flight (ms)", fontsize=12)
 ax.set_ylabel("RMS waist (µm)", fontsize=12)
 ax.set_title(f"NaCs BEC waist evolution  (ε_dd={eps_dd:.2f},  N={N_mol})", fontsize=12)
@@ -336,8 +332,8 @@ ar0_zx = aspect_zx[0]
 ar0_zy = aspect_zy[0]
 cd_zx  = ar0_zx * bz_cd / bx_cd
 cd_zy  = ar0_zy * bz_cd / by_cd
-eb_zx  = ar0_zx * bz_eb / bperp_eb   # Eberlein: same b_⊥ for x and y
-eb_zy  = ar0_zy * bz_eb / bperp_eb
+eb_zx  = ar0_zx * bz_eb / bx_eb
+eb_zy  = ar0_zy * bz_eb / by_eb
 
 def find_inversion(ratio, times):
     """Return time when ratio crosses 1 from below, or None if never."""
@@ -383,4 +379,77 @@ ax.legend(fontsize=9);  ax.grid(True, alpha=0.3)
 fig3.tight_layout()
 plt.savefig("tof_aspect_ratio.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_aspect_ratio.png")
+plt.show(block=False)
+
+# ── 6. N-scan: inversion time vs atom number ─────────────────────────────────
+print("\nRunning N-scan...")
+
+N_scan_vals = [500, 1000, 2000, 4000, 8000]
+
+def run_tof_for_N(N_val):
+    """Return (t_inv_zx_ms, t_inv_zy_ms) for a given N."""
+    g_c = 4 * np.pi * (a_s / a_ho)
+    g_d = 4 * np.pi * (a_dd / a_ho)
+    g_l = g_lhy * (N_val / N_mol)**0   # g_lhy already in ho units; rescale N below
+
+    @jit
+    def _pot_step(psi, dt, V_ext):
+        n      = jnp.abs(psi)**2
+        n_k    = jnp.fft.fftn(n)
+        Phi_dd = jnp.fft.ifftn(N_val * g_d * dk_j * n_k).real
+        V_lhy  = g_lhy * (N_val * n)**1.5
+        phase  = (V_ext + N_val * g_c * n + Phi_dd + V_lhy) * dt
+        return psi * jnp.exp(-1j * phase)
+
+    @jit
+    def _step(psi, dt, V_ext, kp):
+        psi = jnp.fft.ifftn(jnp.fft.fftn(psi) * kp)
+        psi = _pot_step(psi, dt, V_ext)
+        psi = jnp.fft.ifftn(jnp.fft.fftn(psi) * kp)
+        return psi
+
+    # imaginary-time ground state
+    psi = normalize(jnp.array(
+        np.exp(-(X**2/(2*1.5**2) + Y**2/(2*0.8**2) + Z**2/(2*0.6**2))).astype(complex)
+    ))
+    for step in range(3000):
+        psi = _step(psi, dt_imag, V_trap_j, kp_imag)
+        psi = normalize(psi)
+
+    # TOF
+    wx_arr, wy_arr, wz_arr = [], [], []
+    psi_tof = psi
+    for step in range(n_tof_steps + 1):
+        n3d = jnp.abs(psi_tof)**2
+        wx_arr.append(rms_waist(n3d, X_j))
+        wy_arr.append(rms_waist(n3d, Y_j))
+        wz_arr.append(rms_waist(n3d, Z_j))
+        if step < n_tof_steps:
+            psi_tof = _step(psi_tof, dt_real, V_off, kp_real)
+
+    az_x = np.array(wz_arr) / np.array(wx_arr)
+    az_y = np.array(wz_arr) / np.array(wy_arr)
+    t_zx = find_inversion(az_x, waist_times_ms)
+    t_zy = find_inversion(az_y, waist_times_ms)
+    return t_zx, t_zy
+
+scan_t_zx, scan_t_zy = [], []
+for N_val in N_scan_vals:
+    print(f"  N = {N_val}...")
+    t_zx, t_zy = run_tof_for_N(N_val)
+    scan_t_zx.append(t_zx)
+    scan_t_zy.append(t_zy)
+    print(f"    t_inv z/x = {t_zx:.2f} ms,  z/y = {t_zy:.2f} ms" if t_zx else "    not reached")
+
+fig4, ax = plt.subplots(figsize=(7, 5))
+ax.plot(N_scan_vals, scan_t_zx, 'o-', color='tomato',    label="σ_z / σ_x")
+ax.plot(N_scan_vals, scan_t_zy, 's--', color='darkorange', label="σ_z / σ_y")
+ax.set_xlabel("Atom number N", fontsize=12)
+ax.set_ylabel("Inversion time (ms)", fontsize=12)
+ax.set_title(f"Aspect ratio inversion time vs N\n"
+             f"trap ({freq_x_Hz},{freq_y_Hz},{freq_z_Hz}) Hz  |  ε_dd={eps_dd:.2f}", fontsize=11)
+ax.legend(fontsize=10);  ax.grid(True, alpha=0.3)
+fig4.tight_layout()
+plt.savefig("tof_N_scan.png", dpi=150, bbox_inches='tight')
+print("Saved: tof_N_scan.png")
 plt.show(block=True)
