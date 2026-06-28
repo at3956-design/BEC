@@ -83,7 +83,7 @@ print(f"LHY:  f(ε_dd) = {f_edd:.4f}  |  g_lhy = {g_lhy:.4e}")
 
 # ── Grid ──────────────────────────────────────────────────────────────────────
 Nx, Ny, Nz = 64, 64, 128
-Lx, Ly, Lz = 12.0, 12.0, 10.0
+Lx, Ly, Lz = 16.0, 16.0, 16.0
 
 x = np.linspace(-Lx, Lx, Nx, endpoint=False)
 y = np.linspace(-Ly, Ly, Ny, endpoint=False)
