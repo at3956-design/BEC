@@ -252,9 +252,10 @@ plt.savefig("tof_expansion.png", dpi=150, bbox_inches='tight')
 print("Saved: tof_expansion.png")
 plt.show(block=False)
 
-# ── 4. Waist evolution + Castin-Dum theory ───────────────────────────────────
+# ── 4. Waist evolution + scaling theories ────────────────────────────────────
 from scipy.integrate import solve_ivp
 
+# Contact-only Castin-Dum
 def castin_dum(t, y):
     bx, by, bz, dbx, dby, dbz = y
     vol = bx * by * bz
@@ -263,23 +264,60 @@ def castin_dum(t, y):
             wy**2 / (by * vol),
             wz**2 / (bz * vol)]
 
+# Dipolar anisotropy function f(κ), κ = R_z/R_⊥ (Eberlein et al. PRA 2005)
+def f_kappa(kappa):
+    if abs(kappa - 1.0) < 1e-6:
+        return 0.0
+    elif kappa < 1.0:
+        e = np.sqrt(1.0 - kappa**2)
+        return (1 + 2*kappa**2) / (1 - kappa**2) - 3*kappa**2 * np.arctanh(e) / e**3
+    else:
+        e = np.sqrt(kappa**2 - 1.0)
+        return (1 + 2*kappa**2) / (1 - kappa**2) + 3*kappa**2 * np.arctan(e) / e**3
+
+# Eberlein dipolar scaling (cylindrical symmetry, dipoles along z)
+# b_⊥ ≈ b_x ≈ b_y (uses ω_⊥ = geometric mean of ω_x, ω_y)
+w_perp = np.sqrt(wx * wy)
+
+def eberlein(t, y, kappa0):
+    bperp, bz, dbperp, dbz = y
+    kp   = kappa0 * bz / bperp      # instantaneous κ
+    fk   = f_kappa(kp)
+    fk0  = f_kappa(kappa0)
+    norm_perp = 1 - eps_dd * (1 + fk0)
+    norm_z    = 1 + 2 * eps_dd * fk0
+    ddperp = (w_perp**2 / (bperp**2 * bz)) * (1 - eps_dd*(1 + fk)) / norm_perp
+    ddz    = (wz**2    / (bz**2 * bperp**2)) * (1 + 2*eps_dd*fk) / norm_z
+    return [dbperp, dbz, ddperp, ddz]
+
 t_max_ho = max(waist_times_ms) / t_unit_ms
 t_cd     = np.linspace(0, t_max_ho, 500)
-sol      = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
-                     t_eval=t_cd, rtol=1e-10, atol=1e-12)
-bx_cd, by_cd, bz_cd = sol.y[0], sol.y[1], sol.y[2]
-t_cd_ms  = t_cd * t_unit_ms
 
-# σ_i(t) = σ_i(0) * b_i(t)
+sol_cd = solve_ivp(castin_dum, [0, t_max_ho], [1, 1, 1, 0, 0, 0],
+                   t_eval=t_cd, rtol=1e-10, atol=1e-12)
+bx_cd, by_cd, bz_cd = sol_cd.y[0], sol_cd.y[1], sol_cd.y[2]
+
 sx0, sy0, sz0 = waist_x[0], waist_y[0], waist_z[0]
+kappa0 = sz0 / sx0   # initial aspect ratio from eGPE ground state
+fk0    = f_kappa(kappa0)
+print(f"Eberlein theory:  κ_0 = {kappa0:.3f}  |  f(κ_0) = {fk0:.4f}")
 
-fig2, ax = plt.subplots(figsize=(7, 5))
+sol_eb = solve_ivp(eberlein, [0, t_max_ho], [1, 1, 0, 0],
+                   t_eval=t_cd, rtol=1e-10, atol=1e-12,
+                   args=(kappa0,))
+bperp_eb, bz_eb = sol_eb.y[0], sol_eb.y[1]
+t_cd_ms = t_cd * t_unit_ms
+
+fig2, ax = plt.subplots(figsize=(8, 5))
 ax.plot(waist_times_ms, waist_x, color='steelblue',      label=f"eGPE x  ({freq_x_Hz} Hz)")
 ax.plot(waist_times_ms, waist_y, color='cornflowerblue', label=f"eGPE y  ({freq_y_Hz} Hz)", ls='--')
 ax.plot(waist_times_ms, waist_z, color='tomato',         label=f"eGPE z  ({freq_z_Hz} Hz)")
-ax.plot(t_cd_ms, sx0 * bx_cd, color='steelblue',      ls=':', lw=2, alpha=0.7, label="C-D x")
-ax.plot(t_cd_ms, sy0 * by_cd, color='cornflowerblue', ls=':', lw=2, alpha=0.7, label="C-D y")
-ax.plot(t_cd_ms, sz0 * bz_cd, color='tomato',         ls=':', lw=2, alpha=0.7, label="C-D z")
+ax.plot(t_cd_ms, sx0 * bx_cd,     color='steelblue',      ls=':',  lw=2, alpha=0.6, label="C-D x (contact)")
+ax.plot(t_cd_ms, sy0 * by_cd,     color='cornflowerblue', ls=':',  lw=2, alpha=0.6, label="C-D y (contact)")
+ax.plot(t_cd_ms, sz0 * bz_cd,     color='tomato',         ls=':',  lw=2, alpha=0.6, label="C-D z (contact)")
+ax.plot(t_cd_ms, sx0 * bperp_eb,  color='steelblue',      ls='--', lw=2, alpha=0.8, label="Eberlein x (dipolar)")
+ax.plot(t_cd_ms, sy0 * bperp_eb,  color='cornflowerblue', ls='--', lw=2, alpha=0.8, label="Eberlein y (dipolar)")
+ax.plot(t_cd_ms, sz0 * bz_eb,     color='tomato',         ls='--', lw=2, alpha=0.8, label="Eberlein z (dipolar)")
 ax.set_xlabel("Time of flight (ms)", fontsize=12)
 ax.set_ylabel("RMS waist (µm)", fontsize=12)
 ax.set_title(f"NaCs BEC waist evolution  (ε_dd={eps_dd:.2f},  N={N_mol})", fontsize=12)
@@ -293,14 +331,16 @@ plt.show(block=False)
 aspect_zx = np.array(waist_z) / np.array(waist_x)
 aspect_zy = np.array(waist_z) / np.array(waist_y)
 
-# C-D gives scaling factors b_i(0)=1; multiply by initial aspect ratio from simulation
+# Scaling ratios — seed from simulation initial aspect ratio
 ar0_zx = aspect_zx[0]
 ar0_zy = aspect_zy[0]
 cd_zx  = ar0_zx * bz_cd / bx_cd
 cd_zy  = ar0_zy * bz_cd / by_cd
+eb_zx  = ar0_zx * bz_eb / bperp_eb   # Eberlein: same b_⊥ for x and y
+eb_zy  = ar0_zy * bz_eb / bperp_eb
 
 def find_inversion(ratio, times):
-    """Return time when ratio crosses 1 from below, or None if it never does."""
+    """Return time when ratio crosses 1 from below, or None if never."""
     idx = np.where(np.diff(np.sign(ratio - 1.0)) > 0)[0]
     if len(idx) == 0:
         return None
@@ -311,30 +351,30 @@ t_inv_sim_zx = find_inversion(aspect_zx, waist_times_ms)
 t_inv_sim_zy = find_inversion(aspect_zy, waist_times_ms)
 t_inv_cd_zx  = find_inversion(cd_zx,    t_cd_ms)
 t_inv_cd_zy  = find_inversion(cd_zy,    t_cd_ms)
+t_inv_eb_zx  = find_inversion(eb_zx,    t_cd_ms)
+t_inv_eb_zy  = find_inversion(eb_zy,    t_cd_ms)
 
 print(f"\nAspect ratio inversion times:")
-for label, t in [("eGPE σ_z/σ_x", t_inv_sim_zx), ("eGPE σ_z/σ_y", t_inv_sim_zy),
-                 ("C-D  σ_z/σ_x", t_inv_cd_zx),  ("C-D  σ_z/σ_y", t_inv_cd_zy)]:
+for label, t in [("eGPE     σ_z/σ_x", t_inv_sim_zx), ("eGPE     σ_z/σ_y", t_inv_sim_zy),
+                 ("C-D      σ_z/σ_x", t_inv_cd_zx),  ("C-D      σ_z/σ_y", t_inv_cd_zy),
+                 ("Eberlein σ_z/σ_x", t_inv_eb_zx),  ("Eberlein σ_z/σ_y", t_inv_eb_zy)]:
     print(f"  {label}: {f'{t:.2f} ms' if t is not None else 'not reached'}")
 
-fig3, ax = plt.subplots(figsize=(7, 5))
-ax.plot(waist_times_ms, aspect_zx, color='tomato',      label="eGPE  σ_z / σ_x")
-ax.plot(waist_times_ms, aspect_zy, color='darkorange',  label="eGPE  σ_z / σ_y", ls='--')
-ax.plot(t_cd_ms, cd_zx, color='tomato',    label="C-D theory  b_z / b_x", ls=':', lw=2, alpha=0.7)
-ax.plot(t_cd_ms, cd_zy, color='darkorange', label="C-D theory  b_z / b_y", ls=':', lw=2, alpha=0.7)
+fig3, ax = plt.subplots(figsize=(8, 5))
+ax.plot(waist_times_ms, aspect_zx, color='tomato',    lw=2,  label="eGPE  σ_z / σ_x")
+ax.plot(waist_times_ms, aspect_zy, color='darkorange',lw=2,  label="eGPE  σ_z / σ_y", ls='--')
+ax.plot(t_cd_ms, cd_zx, color='tomato',     ls=':',  lw=1.5, alpha=0.6, label="C-D (contact) z/x")
+ax.plot(t_cd_ms, cd_zy, color='darkorange', ls=':',  lw=1.5, alpha=0.6, label="C-D (contact) z/y")
+ax.plot(t_cd_ms, eb_zx, color='tomato',     ls='--', lw=1.5, alpha=0.8, label="Eberlein (dipolar) z/x")
+ax.plot(t_cd_ms, eb_zy, color='darkorange', ls='--', lw=1.5, alpha=0.8, label="Eberlein (dipolar) z/y")
 ax.axhline(1.0, color='gray', lw=1, ls=':', label="aspect ratio = 1")
-if t_inv_sim_zx is not None:
-    ax.axvline(t_inv_sim_zx, color='tomato', lw=1, ls='--', alpha=0.5,
-               label=f"inv sim z/x  {t_inv_sim_zx:.1f} ms")
-if t_inv_cd_zx is not None:
-    ax.axvline(t_inv_cd_zx,  color='tomato', lw=1, ls=':',  alpha=0.5,
-               label=f"inv C-D z/x  {t_inv_cd_zx:.1f} ms")
-if t_inv_sim_zy is not None:
-    ax.axvline(t_inv_sim_zy, color='darkorange', lw=1, ls='--', alpha=0.5,
-               label=f"inv sim z/y  {t_inv_sim_zy:.1f} ms")
-if t_inv_cd_zy is not None:
-    ax.axvline(t_inv_cd_zy,  color='darkorange', lw=1, ls=':',  alpha=0.5,
-               label=f"inv C-D z/y  {t_inv_cd_zy:.1f} ms")
+for t_val, col, lbl in [(t_inv_sim_zx,'tomato','sim z/x'),
+                         (t_inv_eb_zx, 'tomato','Eb z/x'),
+                         (t_inv_sim_zy,'darkorange','sim z/y'),
+                         (t_inv_eb_zy, 'darkorange','Eb z/y')]:
+    if t_val is not None:
+        ls = '--' if 'sim' in lbl else '-.'
+        ax.axvline(t_val, color=col, lw=1, ls=ls, alpha=0.5, label=f"inv {lbl}  {t_val:.1f} ms")
 ax.set_xlabel("Time of flight (ms)", fontsize=12)
 ax.set_ylabel("Aspect ratio", fontsize=12)
 ax.set_title(f"Aspect ratio inversion  (ε_dd={eps_dd:.2f},  N={N_mol})\n"
